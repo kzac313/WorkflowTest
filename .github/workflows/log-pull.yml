@@ -1,0 +1,48 @@
+name: Log Pull Events
+
+on:
+  pull_request:
+    types: [closed]
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  log_pull:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          # Fetch enough history to get commit messages
+          fetch-depth: 2
+          
+      - name: Append to Log
+        run: |
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            if [ "${{ github.event.pull_request.merged }}" == "true" ]; then
+              MESSAGE="PR Merged: #${{ github.event.pull_request.number }} - ${{ github.event.pull_request.title }}"
+            else
+              MESSAGE="PR Closed without merge: #${{ github.event.pull_request.number }}"
+            fi
+          else
+            # For direct pushes, get the latest commit message
+            COMMIT_MSG=$(git log -1 --pretty=%B)
+            # Remove newlines for a single-line log
+            COMMIT_MSG_SINGLE_LINE=$(echo "$COMMIT_MSG" | tr '\n' ' ' | sed 's/ $//')
+            MESSAGE="Push: $COMMIT_MSG_SINGLE_LINE"
+          fi
+          
+          echo "[$TIMESTAMP] $MESSAGE" >> pull_logs.txt
+          
+      - name: Commit Changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: auto-update pull logs"
+          file_pattern: 'pull_logs.txt'
